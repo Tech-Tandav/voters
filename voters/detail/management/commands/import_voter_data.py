@@ -117,18 +117,10 @@ class Command(BaseCommand):
         parser.add_argument('folder_path', type=str, help='Path to the root folder containing province directories')
 
     def handle(self, *args, **options):
-        folder_path = options['folder_path']
+        folder_path = '/app/province'  # fixed path
 
-        # Fallback: if the user path doesn't exist, try /app/province
         if not os.path.exists(folder_path):
-            fallback = '/app/province'
-            if os.path.exists(fallback):
-                self.stdout.write(self.style.WARNING(
-                    f"Folder not found at {folder_path}, using fallback {fallback}"
-                ))
-                folder_path = fallback
-            else:
-                raise CommandError(f"Folder does not exist: {folder_path}")
+            raise CommandError(f"Folder does not exist: {folder_path}")
 
         self.stdout.write(self.style.SUCCESS(f"Starting import from: {folder_path}"))
 
