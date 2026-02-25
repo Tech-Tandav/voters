@@ -12,8 +12,8 @@ import tempfile
 import logging
 import time
 from django.conf import settings
-from voters.utils.csv_processor import CSVProcessor
-from voters.models import UploadHistory
+from voters.detail.utils.csv_processor import CSVProcessor
+from voters.detail.models import UploadHistory
 
 logger = logging.getLogger(__name__)
 

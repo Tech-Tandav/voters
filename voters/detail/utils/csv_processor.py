@@ -10,8 +10,8 @@ import logging
 import time
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from voters.models import Voter, UploadHistory
-from voters.utils import extract_surname, normalize_surname, map_surname_to_caste
+from voters.detail.models import Voter, UploadHistory
+from voters.detail.utils import extract_surname, normalize_surname, map_surname_to_caste
 import json
 import os
 

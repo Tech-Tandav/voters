@@ -6,7 +6,7 @@ Uses the SurnameMapping model from database.
 """
 
 from django.core.cache import cache
-from voters.models import SurnameMapping
+from voters.detail.models import SurnameMapping
 import logging
 
 logger = logging.getLogger(__name__)

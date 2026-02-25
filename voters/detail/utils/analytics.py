@@ -8,7 +8,7 @@ Generates chart-ready data and statistical summaries.
 import pandas as pd
 import logging
 from django.db.models import Q
-from voters.models import Voter
+from voters.detail.models import Voter
 
 logger = logging.getLogger(__name__)
 
