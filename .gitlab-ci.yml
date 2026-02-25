@@ -1,0 +1,29 @@
+stages:
+    - dev
+    - prod
+dev:
+    stage: dev
+    image: veekrum/ssh-client
+    only:
+        - dev
+    script:
+        - chmod 400 $ID_RSA_DEV
+        - echo $ID_RSA_DEV
+        - ssh -i $ID_RSA_DEV -o StrictHostKeyChecking=no $DEV_SERVER "./$DEV_SCRIPT.sh"
+        - echo "Work done"
+    environment:
+        name: dev
+        url: 'api.voters.nicnepal.org'
+prod:
+    stage: prod
+    image: veekrum/ssh-client
+    only:
+        - main
+    script:
+        - chmod 400 $ID_RSA
+        - echo $ID_RSA
+        - ssh -i $ID_RSA -o StrictHostKeyChecking=no $PROD_SERVER "./$PROD_SCRIPT.sh"
+        - echo "Work done"
+    environment:
+        name: prod
+        url: 'api.voters.nicnepal.org'

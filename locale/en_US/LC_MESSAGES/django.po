@@ -1,0 +1,12 @@
+# Translations for the voters project
+# Copyright (C) 2026 Indra Oli
+# Indra Oli <indra-oli@api.voters.nicnepal.org>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: 0.1.0\n"
+"Language: en-US\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"

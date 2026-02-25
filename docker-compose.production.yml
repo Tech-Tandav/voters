@@ -1,0 +1,93 @@
+volumes:
+  production_postgres_data: {}
+  production_postgres_data_backups: {}
+  production_django_media: {}
+  production_django_staticfiles: {}
+  
+  production_redis_data: {}
+  
+networks:
+  voters:
+
+services:
+  django: &django
+    build:
+      context: .
+      dockerfile: ./compose/production/django/Dockerfile
+
+    image: voters_production_django
+    volumes:
+      - production_django_media:/app/voters/media
+    depends_on:
+      - postgres
+      - redis
+    env_file:
+      - ./.envs/.production/.django
+      - ./.envs/.production/.postgres
+    command: /start
+    networks:
+      - voters
+    restart: always
+
+  postgres:
+    build:
+      context: .
+      dockerfile: ./compose/production/postgres/Dockerfile
+    image: voters_production_postgres
+    volumes:
+      - production_postgres_data:/var/lib/postgresql/data
+      - production_postgres_data_backups:/backups
+    env_file:
+      - ./.envs/.production/.postgres
+    networks:
+      - voters
+    restart: always
+
+  redis:
+    image: docker.io/redis:6
+    
+    volumes:
+      - production_redis_data:/data
+    
+    networks:
+      - voters
+    restart: always
+
+  celeryworker:
+    <<: *django
+    image: voters_production_celeryworker
+    command: /start-celeryworker
+    networks:
+      - voters
+    restart: always
+
+  celerybeat:
+    <<: *django
+    image: voters_production_celerybeat
+    command: /start-celerybeat
+    networks:
+      - voters
+    restart: always
+
+  flower:
+    <<: *django
+    image: voters_production_flower
+    command: /start-flower
+    networks:
+      - voters
+    restart: always
+
+  nginx:
+    build:
+      context: .
+      dockerfile: ./compose/production/nginx/Dockerfile
+    image: voters_production_nginx
+    depends_on:
+      - django
+    volumes:
+      - production_django_media:/app/media
+    ports:
+      - 9494:80
+    networks:
+      - voters
+    restart: always
