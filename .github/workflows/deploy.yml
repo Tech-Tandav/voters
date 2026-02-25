@@ -18,4 +18,4 @@ jobs:
           script: |
             cd /home/ubuntu/projects/election/voters
             git pull
-            docker compose -f docker-compose.yml up -d --build --force-recreate
+            docker compose -f docker-compose.production.yml up -d --build --force-recreate
