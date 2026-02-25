@@ -1,0 +1,21 @@
+name: Vote Classifier
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SSH_KEY }}
+          port: 4096
+          script: |
+            cd /home/ubuntu/projects/election/voters
+            git pull
+            docker compose -f docker-compose.yml up -d --build --force-recreate

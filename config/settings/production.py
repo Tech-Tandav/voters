@@ -161,3 +161,15 @@ SPECTACULAR_SETTINGS["SERVERS"] = [
 USERNAME = env("USERNAME", default="")
 PASSWORD = env("PASSWORD", default="")
 EMAIL = "noreply@nicnepal.org"
+
+
+# File Upload Settings
+# Limit to 55MB to prevent timeouts
+DATA_UPLOAD_MAX_MEMORY_SIZE = 55 * 1024 * 1024   # 50MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 55 * 1024 * 1024 
+
+# Dev only – allow all origins
+CORS_ALLOW_ALL_ORIGINS = True
+
+# If frontend uses cookies / sessions
+CORS_ALLOW_CREDENTIALS = True
