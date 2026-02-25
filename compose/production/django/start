@@ -1,53 +1,15 @@
 #!/bin/bash
-# entrypoint.sh
-# -------------------------------
-# 1. Run migrations
-# 2. Import voter data once (all provinces)
-# 3. Start Gunicorn ASGI server
 
-set -euo pipefail
+set -o errexit
+set -o pipefail
+set -o nounset
 
-APP_DIR=/app
-PROVINCE_DIR="$APP_DIR/province"
-IMPORT_MARKER=/data/import_done
+# python /app/manage.py makemigrations
+python /app/manage.py migrate
+python /app/manage.py collectstatic --noinput
 
-# -------------------------------
-# Ensure /data exists for the import marker
-mkdir -p /data
+python /app/manage.py customcreatesuperuser
 
-# -------------------------------
-# 1️⃣ Migrations & static files
-echo "Running migrations..."
-python "$APP_DIR/manage.py" migrate --noinput
-python "$APP_DIR/manage.py" collectstatic --noinput
-# python "$APP_DIR/manage.py" load_surname_mappings || true
-python manage.py import_voter_data province/koshi
-
-# # -------------------------------
-# # 2️⃣ Import voter data only once
-# if [ ! -f "$IMPORT_MARKER" ]; then
-#     if [ -d "$PROVINCE_DIR" ]; then
-#         for province in "$PROVINCE_DIR"/*; do
-#             if [ -d "$province" ]; then
-#                 echo "Importing province: $(basename "$province")"
-#                 python "$APP_DIR/manage.py" import_voter_data "$province"
-#             fi
-#         done
-#         touch "$IMPORT_MARKER"
-#         echo "Voter data import completed."
-#     else
-#         echo "ERROR: Province folder not found at $PROVINCE_DIR"
-#         ls "$APP_DIR"  # list folders for debugging
-#         exit 1
-#     fi
-# else
-#     echo "Voter data already imported. Skipping."
-# fi
-
-# -------------------------------
-# 3️⃣ Create superuser (optional)
-python "$APP_DIR/manage.py" customcreatesuperuser || true
-
-# -------------------------------
-# 4️⃣ Start Gunicorn ASGI server
-exec /usr/local/bin/gunicorn config.asgi --bind 0.0.0.0:5000 --chdir="$APP_DIR" -k uvicorn_worker.UvicornWorker
+# python manage.py import_csv || true
+# python manage.py load_surname_mappings || true
+exec /usr/local/bin/gunicorn config.asgi --bind 0.0.0.0:5000 --chdir=/app -k uvicorn_worker.UvicornWorker
