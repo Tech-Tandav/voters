@@ -118,8 +118,17 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         folder_path = options['folder_path']
+
+        # Fallback: if the user path doesn't exist, try /app/province
         if not os.path.exists(folder_path):
-            raise CommandError(f"Folder does not exist: {folder_path}")
+            fallback = '/app/province'
+            if os.path.exists(fallback):
+                self.stdout.write(self.style.WARNING(
+                    f"Folder not found at {folder_path}, using fallback {fallback}"
+                ))
+                folder_path = fallback
+            else:
+                raise CommandError(f"Folder does not exist: {folder_path}")
 
         self.stdout.write(self.style.SUCCESS(f"Starting import from: {folder_path}"))
 
@@ -152,8 +161,8 @@ class Command(BaseCommand):
                     processor.province_override = province
                     processor.constituency_override = constituency
 
-                    # Use batch insert for large datasets
-                    result = processor.process(batch_size=BATCH_SIZE)  # CSVProcessor should support batch_size
+                    # Batch insert for large CSVs
+                    result = processor.process(batch_size=BATCH_SIZE)
 
                     if result['success']:
                         stats['files_processed'] += 1
@@ -167,7 +176,9 @@ class Command(BaseCommand):
 
                 except Exception as e:
                     stats['files_failed'] += 1
-                    with open('/data/import_errors.log', 'a') as f:
+                    log_file = '/app/data/import_errors.log'
+                    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+                    with open(log_file, 'a') as f:
                         f.write(f"{file_path} - {str(e)}\n")
                     self.stdout.write(self.style.ERROR(f"  Error processing {filename}: {str(e)}"))
 
