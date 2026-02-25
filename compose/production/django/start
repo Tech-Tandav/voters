@@ -20,28 +20,28 @@ mkdir -p /data
 echo "Running migrations..."
 python "$APP_DIR/manage.py" migrate --noinput
 python "$APP_DIR/manage.py" collectstatic --noinput
-python "$APP_DIR/manage.py" load_surname_mappings || true
+# python "$APP_DIR/manage.py" load_surname_mappings || true
 
-# -------------------------------
-# 2️⃣ Import voter data only once
-if [ ! -f "$IMPORT_MARKER" ]; then
-    if [ -d "$PROVINCE_DIR" ]; then
-        for province in "$PROVINCE_DIR"/*; do
-            if [ -d "$province" ]; then
-                echo "Importing province: $(basename "$province")"
-                python "$APP_DIR/manage.py" import_voter_data "$province"
-            fi
-        done
-        touch "$IMPORT_MARKER"
-        echo "Voter data import completed."
-    else
-        echo "ERROR: Province folder not found at $PROVINCE_DIR"
-        ls "$APP_DIR"  # list folders for debugging
-        exit 1
-    fi
-else
-    echo "Voter data already imported. Skipping."
-fi
+# # -------------------------------
+# # 2️⃣ Import voter data only once
+# if [ ! -f "$IMPORT_MARKER" ]; then
+#     if [ -d "$PROVINCE_DIR" ]; then
+#         for province in "$PROVINCE_DIR"/*; do
+#             if [ -d "$province" ]; then
+#                 echo "Importing province: $(basename "$province")"
+#                 python "$APP_DIR/manage.py" import_voter_data "$province"
+#             fi
+#         done
+#         touch "$IMPORT_MARKER"
+#         echo "Voter data import completed."
+#     else
+#         echo "ERROR: Province folder not found at $PROVINCE_DIR"
+#         ls "$APP_DIR"  # list folders for debugging
+#         exit 1
+#     fi
+# else
+#     echo "Voter data already imported. Skipping."
+# fi
 
 # -------------------------------
 # 3️⃣ Create superuser (optional)
