@@ -36,3 +36,4 @@ django-json-widget==2.1.0
 django-better-admin-arrayfield==1.4.2
 django-filter==25.2
 drf-standardized-errors==0.15.0
+pandas==3.0.1
