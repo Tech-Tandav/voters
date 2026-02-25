@@ -21,7 +21,7 @@ echo "Running migrations..."
 python "$APP_DIR/manage.py" migrate --noinput
 python "$APP_DIR/manage.py" collectstatic --noinput
 # python "$APP_DIR/manage.py" load_surname_mappings || true
-
+python manage.py import_voter_data province/koshi
 # # -------------------------------
 # # 2️⃣ Import voter data only once
 # if [ ! -f "$IMPORT_MARKER" ]; then
