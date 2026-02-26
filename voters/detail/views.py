@@ -160,6 +160,7 @@ def apply_filters(queryset, request):
     ],
     responses={200: OverviewStatsSerializer}
 )
+
 @api_view(['GET'])
 def overview_stats(request):
     """
