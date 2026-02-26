@@ -134,13 +134,16 @@ class Command(BaseCommand):
         jobs = []
 
         for root, dirs, files in os.walk(folder_path):
-            province = os.path.basename(root)
+            if not files:
+                continue  # skip empty folders
 
+            # Determine province name
             if root == folder_path:
-                continue
-
-            if province.endswith('Province'):
-                province = province.replace('Province', '').strip()
+                province = os.path.basename(folder_path)  # use root folder name
+            else:
+                province = os.path.basename(root)
+                if province.endswith('Province'):
+                    province = province.replace('Province', '').strip()
 
             for filename in files:
                 if not filename.lower().endswith('.csv'):
