@@ -105,8 +105,8 @@ from voters.detail.utils.csv_processor import CSVProcessor
 
 import os
 import time
-from django.core.management.base import BaseCommand, CommandError
 from celery import group
+from django.core.management.base import BaseCommand, CommandError
 from voters.detail.tasks import import_voters_csv
 
 class Command(BaseCommand):
@@ -130,7 +130,7 @@ class Command(BaseCommand):
         stats = {'files_found': 0, 'files_queued': 0}
         jobs = []
 
-        # Only files directly in folder_path
+        # Iterate only files directly in folder_path
         for filename in os.listdir(folder_path):
             file_path = os.path.join(folder_path, filename)
 
@@ -144,7 +144,7 @@ class Command(BaseCommand):
             constituency = os.path.splitext(filename)[0]
             province = os.path.basename(folder_path)  # folder name as province
 
-            # Celery task signature
+            # Create Celery signature
             task_sig = import_voters_csv.s(
                 file_path=file_path,
                 province=province,
@@ -157,7 +157,7 @@ class Command(BaseCommand):
                 f"Queued task for: Province='{province}', Constituency='{constituency}'"
             ))
 
-        # Send tasks to Celery if any
+        # Send tasks to Celery
         if jobs:
             result = group(jobs).apply_async(queue="imports")
             stats['files_queued'] = len(jobs)

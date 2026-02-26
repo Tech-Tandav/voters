@@ -24,23 +24,17 @@ logger = logging.getLogger(__name__)
 
 
 
-import logging
-logger = logging.getLogger(__name__)
 
 
 import os
 import json
-import time
 import pandas as pd
+import logging
 from django.db import transaction
 from django.utils.timezone import now
 from voters.detail.models import Voter, UploadHistory
-from voters.detail.utils import extract_surname, normalize_surname, map_surname_to_caste
-import logging
-
 
 logger = logging.getLogger(__name__)
-
 
 class CSVProcessor:
     REQUIRED_COLUMNS = [
@@ -68,72 +62,11 @@ class CSVProcessor:
         self.errors = []
         self.unmapped_surnames = set()
 
-    # ---------- IO ----------
     @staticmethod
     def read_rows(csv_file):
         df = pd.read_csv(csv_file)
         return df.to_dict("records")
 
-    # ---------- Validation ----------
-    def validate_csv(self):
-        try:
-            self.df = pd.read_csv(self.csv_file)
-            if self.df.empty:
-                return False, "CSV file is empty"
-            missing_columns = set(self.REQUIRED_COLUMNS) - set(self.df.columns)
-            if missing_columns:
-                return False, f"Missing columns: {', '.join(missing_columns)}"
-            return True, None
-        except Exception as e:
-            logger.exception("CSV validation error")
-            return False, str(e)
-
-    # ---------- Orchestrator ----------
-    def process(self):
-        start_time = time.time()
-        is_valid, error_msg = self.validate_csv()
-        if not is_valid:
-            return self._fail(error_msg)
-
-        file_name = os.path.basename(self.csv_file)
-        self.upload_history = UploadHistory.objects.create(
-            file_name=file_name,
-            uploaded_by=self.user,
-            total_records=len(self.df),
-            status='processing',
-            started_at=now(),
-        )
-
-        rows = self.df.to_dict("records")
-        total_imported, total_failed = 0, 0
-
-        try:
-            for batch in self._chunk(rows, self.BATCH_SIZE):
-                imported, failed = self.process_batch(batch)
-                total_imported += imported
-                total_failed += failed
-
-            processing_time = time.time() - start_time
-            self.upload_history.success_count = total_imported
-            self.upload_history.error_count = total_failed
-            self.upload_history.status = 'completed'
-            self.upload_history.processing_time = processing_time
-            self.upload_history.unmapped_surnames = json.dumps(list(self.unmapped_surnames))
-            self.upload_history.save()
-
-            return {
-                'success': True,
-                'total': len(rows),
-                'imported': total_imported,
-                'failed': total_failed,
-                'unmapped_surnames': list(self.unmapped_surnames),
-                'processing_time': processing_time,
-            }
-
-        except Exception as e:
-            return self._fail(str(e))
-
-    # ---------- Batch Processor ----------
     def process_batch(self, rows):
         voters_to_create = []
         voters_to_update = {}
@@ -173,41 +106,48 @@ class CSVProcessor:
             raise
 
         return len(voters_to_create) + len(voters_to_update), failed
-    # ---------- Row Builder ----------
+
     def _build_voter(self, row, existing=None):
+        from voters.detail.utils import extract_surname, normalize_surname, map_surname_to_caste
+
         name = str(row['Name']).strip()
         age = int(row['Age'])
         gender_raw = str(row['Gender']).strip()
+
         surname = extract_surname(name)
         normalized_surname = normalize_surname(surname)
         caste_group = map_surname_to_caste(normalized_surname)
+
         if caste_group == 'unknown':
             self.unmapped_surnames.add(surname)
+
         gender = self.GENDER_MAPPING.get(gender_raw, 'other')
-        spouse = None if pd.isna(row.get('Spouse')) or row.get('Spouse') == '-' else str(row.get('Spouse')).strip()
-        parent = None if pd.isna(row.get('Parent')) else str(row.get('Parent')).strip()
+
+        spouse = row.get('Spouse')
+        spouse = None if pd.isna(spouse) or spouse == '-' else str(spouse).strip()
+
+        parent = row.get('Parent')
+        parent = None if pd.isna(parent) else str(parent).strip()
+
         province_val = getattr(self, 'province_override', str(row['Province']))
         constituency_val = getattr(self, 'constituency_override', None)
+
         voter = existing or Voter(voter_id=int(row['VoterID']))
-        voter.name, voter.surname, voter.age = name, surname, age
-        voter.gender, voter.caste_group = gender, caste_group
-        voter.province, voter.constituency = province_val, constituency_val
-        voter.district, voter.municipality, voter.ward = str(row['District']), str(row['Municipality']), int(row['Ward'])
-        voter.center, voter.spouse, voter.parent = str(row['Center']), spouse, parent
+        voter.name = name
+        voter.surname = surname
+        voter.age = age
+        voter.gender = gender
+        voter.caste_group = caste_group
+        voter.province = province_val
+        voter.district = str(row['District'])
+        voter.municipality = str(row['Municipality'])
+        voter.ward = int(row['Ward'])
+        voter.constituency = constituency_val
+        voter.center = str(row['Center'])
+        voter.spouse = spouse
+        voter.parent = parent
+
         return voter
-
-    # ---------- Helpers ----------
-    def _chunk(self, rows, size):
-        for i in range(0, len(rows), size):
-            yield rows[i:i + size]
-
-    def _fail(self, error_msg):
-        if self.upload_history:
-            self.upload_history.status = 'failed'
-            self.upload_history.error_log = error_msg
-            self.upload_history.save()
-        logger.error(f"CSV processing failed: {error_msg}")
-        return {'success': False, 'error': error_msg, 'total': 0, 'imported': 0, 'failed': 0}
     
     
     
