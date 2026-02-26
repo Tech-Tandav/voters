@@ -11,7 +11,7 @@ from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 from voters.core.models import BaseModel
-
+from django.utils.timezone import now
 
 class SurnameMapping(BaseModel):
     """
@@ -263,7 +263,7 @@ class UploadHistory(BaseModel):
         blank=True,
         help_text="Processing time in seconds"
     )
-    
+    started_at = models.DateTimeField(default=now) 
     class Meta:
         ordering = ['-upload_date']
         verbose_name = "Upload History"

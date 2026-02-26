@@ -199,3 +199,9 @@ class CSVProcessor:
             self.upload_history.save()
         logger.error(f"CSV processing failed: {error_msg}")
         return {'success': False, 'error': error_msg, 'total': 0, 'imported': 0, 'failed': 0}
+    
+    
+    
+def process_csv_file(csv_file, user=None): 
+    processor = CSVProcessor(csv_file, user) 
+    return processor.process()
