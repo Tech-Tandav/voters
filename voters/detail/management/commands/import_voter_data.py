@@ -133,32 +133,26 @@ class Command(BaseCommand):
 
         jobs = []
 
-        for root, dirs, files in os.walk(folder_path):
-            if not files:
-                continue  # skip empty folders
+        # Only list files directly in folder_path
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
 
-            # Determine province name
-            if root == folder_path:
-                province = os.path.basename(folder_path)  # use root folder name
-            else:
-                province = os.path.basename(root)
-                if province.endswith('Province'):
-                    province = province.replace('Province', '').strip()
+            if not os.path.isfile(file_path):
+                continue  # skip subfolders
 
-            for filename in files:
-                if not filename.lower().endswith('.csv'):
-                    continue
+            if not filename.lower().endswith('.csv'):
+                continue  # skip non-CSV files
 
-                stats['files_found'] += 1
-                file_path = os.path.join(root, filename)
-                constituency = os.path.splitext(filename)[0]
+            stats['files_found'] += 1
+            constituency = os.path.splitext(filename)[0]
+            province = os.path.basename(folder_path)  # use folder name as province
 
-                jobs.append(import_voters_csv.s(
-                    file_path=file_path,
-                    province=province,
-                    constituency=constituency,
-                    user_id=None
-                ))
+            jobs.append(import_voters_csv.s(
+                file_path=file_path,
+                province=province,
+                constituency=constituency,
+                user_id=None
+            ))
 
         if jobs:
             group(jobs).apply_async(queue="imports")
