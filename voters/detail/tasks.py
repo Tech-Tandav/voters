@@ -4,9 +4,6 @@ from voters.detail.utils.csv_processor import CSVProcessor
 from celery.exceptions import SoftTimeLimitExceeded
 
 
-r
-
-
 @shared_task(bind=True)
 def import_voters_csv(self, file_path, province, constituency, user_id=None):
     """
