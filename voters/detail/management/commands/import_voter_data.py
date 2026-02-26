@@ -104,7 +104,7 @@ from voters.detail.utils.csv_processor import CSVProcessor
 import os
 import time
 from django.core.management.base import BaseCommand, CommandError
-# from your_app.tasks import import_voters_csv
+from voters.detail.tasks import import_voters_csv
 
 class Command(BaseCommand):
     help = 'Import voter data from a folder structure (Province/Constituency.csv)'
@@ -164,18 +164,5 @@ class Command(BaseCommand):
         self.stdout.write(f"Files Queued: {stats['files_queued']}")
         self.stdout.write("=" * 40)
 
-from celery import shared_task
-from django.contrib.auth import get_user_model
 
-@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=10, retry_kwargs={'max_retries': 3})
-def import_voters_csv(self, file_path, province, constituency, user_id=None):
-    user = None
-    if user_id:
-        User = get_user_model()
-        user = User.objects.filter(id=user_id).first()
 
-    processor = CSVProcessor(file_path, user=user)
-    processor.province_override = province
-    processor.constituency_override = constituency
-
-    return processor.process()
