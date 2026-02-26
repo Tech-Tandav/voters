@@ -101,10 +101,15 @@ from voters.detail.utils.csv_processor import CSVProcessor
 #         self.stdout.write(f"Records Failed: {stats['records_failed']}")
 #         self.stdout.write("="*40)
 
+# voters/management/commands/import_voters_folder.py
+
 import os
 import time
 from django.core.management.base import BaseCommand, CommandError
+from celery import group
+
 from voters.detail.tasks import import_voters_csv
+
 
 class Command(BaseCommand):
     help = 'Import voter data from a folder structure (Province/Constituency.csv)'
@@ -126,11 +131,13 @@ class Command(BaseCommand):
             'files_queued': 0,
         }
 
+        jobs = []
+
         for root, dirs, files in os.walk(folder_path):
             province = os.path.basename(root)
 
-            if root == folder_path and not province:
-                province = os.path.basename(os.path.dirname(root))
+            if root == folder_path:
+                continue
 
             if province.endswith('Province'):
                 province = province.replace('Province', '').strip()
@@ -143,17 +150,17 @@ class Command(BaseCommand):
                 file_path = os.path.join(root, filename)
                 constituency = os.path.splitext(filename)[0]
 
-                task = import_voters_csv.delay(
+                jobs.append(import_voters_csv.s(
                     file_path=file_path,
                     province=province,
                     constituency=constituency,
                     user_id=None
-                )
-
-                stats['files_queued'] += 1
-                self.stdout.write(self.style.SUCCESS(
-                    f"Queued: Province='{province}', Constituency='{constituency}' → Task ID: {task.id}"
                 ))
+
+        if jobs:
+            group(jobs).apply_async(queue="imports")
+
+        stats['files_queued'] = len(jobs)
 
         duration = time.time() - start_time
         self.stdout.write("\n" + "=" * 40)
@@ -163,6 +170,3 @@ class Command(BaseCommand):
         self.stdout.write(f"Files Found: {stats['files_found']}")
         self.stdout.write(f"Files Queued: {stats['files_queued']}")
         self.stdout.write("=" * 40)
-
-
-
