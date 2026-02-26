@@ -56,6 +56,8 @@ def import_voters_csv_chunk(self, rows, province, constituency, user_id=None):
     """
     Worker task: imports a single batch.
     """
+    logger.info(f"Processing chunk of {len(rows)} rows for {province} / {constituency}")
+
     user = None
     if user_id:
         User = get_user_model()
@@ -66,7 +68,9 @@ def import_voters_csv_chunk(self, rows, province, constituency, user_id=None):
     processor.constituency_override = constituency
 
     try:
-        return processor.process_batch(rows)
-    except SoftTimeLimitExceeded:
-        logger.warning("Soft time limit exceeded for chunk")
+        imported, failed = processor.process_batch(rows)
+        logger.info(f"Chunk processed: {imported} imported, {failed} failed")
+        return imported, failed
+    except Exception as e:
+        logger.exception(f"Chunk processing failed: {e}")
         raise

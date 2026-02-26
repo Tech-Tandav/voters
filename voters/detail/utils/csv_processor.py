@@ -38,7 +38,9 @@ from voters.detail.models import Voter, UploadHistory
 from voters.detail.utils import extract_surname, normalize_surname, map_surname_to_caste
 import logging
 
+
 logger = logging.getLogger(__name__)
+
 
 class CSVProcessor:
     REQUIRED_COLUMNS = [
@@ -133,8 +135,11 @@ class CSVProcessor:
 
     # ---------- Batch Processor ----------
     def process_batch(self, rows):
-        voters_to_create, voters_to_update, failed = [], {}, 0
-        voter_ids = [int(r['VoterID']) for r in rows]
+        voters_to_create = []
+        voters_to_update = {}
+        failed = 0
+
+        voter_ids = [int(r['VoterID']) for r in rows if r.get('VoterID')]
         existing = {v.voter_id: v for v in Voter.objects.filter(voter_id__in=voter_ids)}
 
         for row in rows:
@@ -147,23 +152,27 @@ class CSVProcessor:
             except Exception as e:
                 failed += 1
                 self.errors.append(str(e))
+                logger.exception(f"Row failed: {row}, error: {e}")
 
-        with transaction.atomic():
-            if voters_to_create:
-                Voter.objects.bulk_create(voters_to_create, batch_size=1000)
-            if voters_to_update:
-                Voter.objects.bulk_update(
-                    voters_to_update.values(),
-                    fields=[
-                        'name', 'surname', 'age', 'gender', 'caste_group',
-                        'province', 'district', 'municipality', 'ward',
-                        'constituency', 'center', 'spouse', 'parent'
-                    ],
-                    batch_size=1000
-                )
+        try:
+            with transaction.atomic():
+                if voters_to_create:
+                    Voter.objects.bulk_create(voters_to_create, batch_size=1000)
+                if voters_to_update:
+                    Voter.objects.bulk_update(
+                        voters_to_update.values(),
+                        fields=[
+                            'name', 'surname', 'age', 'gender', 'caste_group',
+                            'province', 'district', 'municipality', 'ward',
+                            'constituency', 'center', 'spouse', 'parent'
+                        ],
+                        batch_size=1000
+                    )
+        except Exception as e:
+            logger.exception(f"DB insert failed for batch: {e}")
+            raise
 
         return len(voters_to_create) + len(voters_to_update), failed
-
     # ---------- Row Builder ----------
     def _build_voter(self, row, existing=None):
         name = str(row['Name']).strip()
