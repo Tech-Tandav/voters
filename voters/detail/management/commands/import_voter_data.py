@@ -107,9 +107,7 @@ import os
 import time
 from django.core.management.base import BaseCommand, CommandError
 from celery import group
-
 from voters.detail.tasks import import_voters_csv
-
 
 class Command(BaseCommand):
     help = 'Import voter data from a folder containing CSV files (Province folder only)'
@@ -132,7 +130,7 @@ class Command(BaseCommand):
         stats = {'files_found': 0, 'files_queued': 0}
         jobs = []
 
-        # Iterate only files directly in folder_path
+        # Only files directly in folder_path
         for filename in os.listdir(folder_path):
             file_path = os.path.join(folder_path, filename)
 
@@ -144,9 +142,9 @@ class Command(BaseCommand):
 
             stats['files_found'] += 1
             constituency = os.path.splitext(filename)[0]
-            province = os.path.basename(folder_path)  # use folder name as province
+            province = os.path.basename(folder_path)  # folder name as province
 
-            # Create Celery signature
+            # Celery task signature
             task_sig = import_voters_csv.s(
                 file_path=file_path,
                 province=province,

@@ -4,36 +4,25 @@ from voters.detail.utils.csv_processor import CSVProcessor
 from celery.exceptions import SoftTimeLimitExceeded
 
 
-@shared_task(bind=True)
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=10, retry_kwargs={'max_retries': 3})
 def import_voters_csv(self, file_path, province, constituency, user_id=None):
     """
-    Orchestrator task: reads CSV and schedules chunk tasks.
-    This task finishes quickly and never touches the DB.
+    Celery task to process a CSV file.
     """
-    rows = CSVProcessor.read_rows(file_path)
+    user = None
+    if user_id:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user = User.objects.filter(id=user_id).first()
 
-    BATCH_SIZE = 1000
-    jobs = []
+    processor = CSVProcessor(file_path, user=user)
+    processor.province_override = province
+    processor.constituency_override = constituency
 
-    for batch in (rows[i:i + BATCH_SIZE] for i in range(0, len(rows), BATCH_SIZE)):
-        jobs.append(
-            import_voters_csv_chunk.s(
-                rows=batch,
-                province=province,
-                constituency=constituency,
-                user_id=user_id,
-            )
-        )
-
-    for job in jobs:
-        job.apply_async(queue="imports")
-
-    return {
-        "file": file_path,
-        "province": province,
-        "constituency": constituency,
-        "chunks": len(jobs),
-    }
+    # Process and return results
+    result = processor.process()
+    return result
 
 
 @shared_task(bind=True, autoretry_for=(), retry_kwargs={'max_retries': 0})

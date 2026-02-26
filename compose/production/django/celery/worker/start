@@ -5,4 +5,5 @@ set -o pipefail
 set -o nounset
 
 
-exec celery -A config.celery_app worker -l INFO -Q imports -D
+# exec celery -A config.celery_app worker -l INFO -Q imports -D
+exec celery -A config.celery_app worker -l INFO -Q imports
