@@ -10,7 +10,7 @@ python /app/manage.py collectstatic --noinput
 
 python /app/manage.py customcreatesuperuser
 
-# python manage.py import_voter_data koshi
+python manage.py import_voter_data koshi
 # python manage.py load_surname_mappings || true
 
 
