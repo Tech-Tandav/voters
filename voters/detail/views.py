@@ -6,7 +6,8 @@ Provides REST API endpoints for:
 - Statistical analysis
 - CSV upload (admin)
 """
-
+import hashlib
+from django.core.cache import cache
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import api_view, action, permission_classes, authentication_classes
 from rest_framework.response import Response
@@ -209,16 +210,56 @@ def age_distribution(request):
 # =============================================================================
 
 
+# class VoterViewSet(viewsets.ReadOnlyModelViewSet):
+#     """
+#     ViewSet for viewing voter data.
+#     Supports filtering, search, and pagination.
+    
+#     list: Get paginated list of voters
+#     retrieve: Get details of a specific voter
+#     count: Get count of voters (filtered)
+#     """
+    
+#     queryset = Voter.objects.all()
+#     serializer_class = VoterSerializer
+#     pagination_class = VoterPagination
+#     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+#     search_fields = ['name', 'voter_id']
+#     ordering_fields = ['age', 'name', 'voter_id']
+#     ordering = ['name']
+    
+#     def get_serializer_class(self):
+#         """Use lightweight serializer for list view"""
+#         if self.action == 'list':
+#             return VoterListSerializer
+#         return VoterSerializer
+    
+#     def get_queryset(self):
+#         """Apply filters to queryset"""
+#         queryset = super().get_queryset()
+#         return apply_filters(queryset, self.request)
+    
+#     @extend_schema(
+#         tags=['Voters'],
+#         summary='Get voter count',
+#         description='Returns total count of voters (with filters applied)',
+#     )
+#     @action(detail=False, methods=['get'])
+#     def count(self, request):
+#         """Get count of voters (respects filters)"""
+#         count = self.get_queryset().count()
+#         return Response({'count': count})
+
 class VoterViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for viewing voter data.
     Supports filtering, search, and pagination.
-    
+
     list: Get paginated list of voters
     retrieve: Get details of a specific voter
-    count: Get count of voters (filtered)
+    count: Get count of voters (filtered, cached)
     """
-    
+
     queryset = Voter.objects.all()
     serializer_class = VoterSerializer
     pagination_class = VoterPagination
@@ -226,30 +267,51 @@ class VoterViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['name', 'voter_id']
     ordering_fields = ['age', 'name', 'voter_id']
     ordering = ['name']
-    
+
     def get_serializer_class(self):
-        """Use lightweight serializer for list view"""
         if self.action == 'list':
             return VoterListSerializer
         return VoterSerializer
-    
+
     def get_queryset(self):
-        """Apply filters to queryset"""
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().only('id')  # makes count faster
         return apply_filters(queryset, self.request)
-    
+
+    def _build_cache_key(self, request):
+        """
+        Build a stable cache key based on query params.
+        Different filters = different cache entries.
+        """
+        params = sorted(request.query_params.items())
+        raw_key = f"voter_count:{params}"
+        return "voter_count:" + hashlib.md5(raw_key.encode()).hexdigest()
+
     @extend_schema(
         tags=['Voters'],
-        summary='Get voter count',
-        description='Returns total count of voters (with filters applied)',
+        summary='Get voter count (cached)',
+        description='Returns total count of voters (with filters applied, cached in Redis)',
     )
     @action(detail=False, methods=['get'])
     def count(self, request):
-        """Get count of voters (respects filters)"""
-        count = self.get_queryset().count()
-        return Response({'count': count})
+        cache_key = self._build_cache_key(request)
 
+        cached_count = cache.get(cache_key)
+        if cached_count is not None:
+            return Response({
+                'count': cached_count,
+                'cached': True
+            })
 
+        queryset = self.get_queryset()
+        count = queryset.count()
+
+        # Cache for 5 minutes (tune based on how fresh data must be)
+        cache.set(cache_key, count, timeout=60 * 10)
+
+        return Response({
+            'count': count,
+            'cached': False
+        })
 # =============================================================================
 # ADMIN ENDPOINTS (CSV Upload, Surname Management)
 # =============================================================================

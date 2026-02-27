@@ -137,8 +137,8 @@ class Voter(BaseModel):
     )
     
     # Location Information
-    province = models.CharField(max_length=100)
-    district = models.CharField(max_length=100)
+    province = models.CharField(max_length=100, db_index=True,)
+    district = models.CharField(max_length=100, db_index=True,)
     constituency = models.CharField(
         max_length=100, 
         db_index=True, 
@@ -164,8 +164,6 @@ class Voter(BaseModel):
         null=True,
         help_text="Parent names"
     )
-    
-
     
     class Meta:
         ordering = ['name']

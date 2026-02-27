@@ -10,11 +10,10 @@ python /app/manage.py collectstatic --noinput
 
 python /app/manage.py customcreatesuperuser
 
-python manage.py import_voter_data gandaki
-python manage.py import_voter_data lumbini
-python manage.py import_voter_data karnali
-python manage.py import_voter_data sp
+#python manage.py import_voter_data sp
 # python manage.py load_surname_mappings || true
+
+
 exec /usr/local/bin/gunicorn config.asgi --bind 0.0.0.0:5000 --chdir=/app -k uvicorn_worker.UvicornWorker
 
 
