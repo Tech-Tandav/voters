@@ -203,15 +203,16 @@ class VoterViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['name', 'voter_id']
     ordering_fields = ['age', 'name', 'voter_id']
     ordering = ['name']
+    filterset_class = VoterAnalyticsFilter
 
     def get_serializer_class(self):
         if self.action == 'list':
             return VoterListSerializer
         return VoterSerializer
 
-    def get_queryset(self):
-        queryset = super().get_queryset().only('id')  # makes count faster
-        return apply_filters(queryset, self.request)
+    # def get_queryset(self):
+    #     queryset = super().get_queryset().only('id')  # makes count faster
+    #     return apply_filters(queryset, self.request)
 
     def _build_cache_key(self, request):
         """
