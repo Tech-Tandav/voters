@@ -227,22 +227,23 @@ class VoterViewSet(viewsets.ReadOnlyModelViewSet):
         summary='Get voter count (cached)',
         description='Returns total count of voters (with filters applied, cached in Redis)',
     )
+    
     @action(detail=False, methods=['get'])
     def count(self, request):
-        cache_key = self._build_cache_key(request)
+        # cache_key = self._build_cache_key(request)
 
-        cached_count = cache.get(cache_key)
-        if cached_count is not None:
-            return Response({
-                'count': cached_count,
-                'cached': True
-            })
+        # cached_count = cache.get(cache_key)
+        # if cached_count is not None:
+        #     return Response({
+        #         'count': cached_count,
+        #         'cached': True
+        #     })
 
         queryset = self.get_queryset()
         count = queryset.count()
 
         # Cache for 5 minutes (tune based on how fresh data must be)
-        cache.set(cache_key, count, timeout=60 * 10)
+        # cache.set(cache_key, count, timeout=60 * 10)
 
         return Response({
             'count': count,
