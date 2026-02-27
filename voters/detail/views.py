@@ -168,19 +168,35 @@ def overview_stats(request):
     ],
     responses={200: DistributionResponseSerializer}
 )
+
+
 @api_view(['GET'])
 def age_distribution(request):
     """
     Get age group distribution.
     Returns data ready for pie/bar charts.
+    Cached per filter combination.
     """
-    queryset = Voter.objects.all()
+
+    # 🔐 Stable cache key based on filters
+    params = sorted(request.query_params.items())
+    raw_key = f"age_distribution:{params}"
+    cache_key = "age_distribution:" + hashlib.md5(raw_key.encode()).hexdigest()
+
+    cached = cache.get(cache_key)
+    if cached:
+        return Response({**cached, "cached": True})
+
+    # ⚡ Limit selected columns for faster count + group by
+    queryset = Voter.objects.only('id', 'age_group')
     queryset = apply_filters(queryset, request)
-    
-    analytics = get_analytics(queryset)
+
+    analytics = VoterAnalytics(queryset)
     data = analytics.get_age_distribution()
-    
-    return Response(data)
+
+    cache.set(cache_key, data, CACHE_TTL)
+
+    return Response({**data, "cached": False})
 
 
 

@@ -62,6 +62,39 @@ class VoterAnalytics:
                 for row in caste_qs
             },
         }
+    
+    
+
+    def get_age_distribution(self):
+        AGE_GROUP_ORDER = ['gen_z', 'working', 'mature', 'senior']
+        total = self.queryset.count()
+
+        qs = (
+            self.queryset
+            .values('age_group')
+            .annotate(total=Count('id'))
+        )
+
+        counts = {row['age_group']: row['total'] for row in qs}
+
+        labels = []
+        values = []
+        percentages = []
+
+        for key in self.AGE_GROUP_ORDER:
+            count = counts.get(key, 0)
+            labels.append(self.AGE_GROUP_LABELS[key])
+            values.append(count)
+            percentages.append(round(count / total * 100, 1) if total else 0)
+
+        return {
+            'chart_data': {
+                'labels': labels,
+                'values': values,
+                'percentages': percentages
+            },
+            'total': total,
+        }
         
 # class VoterAnalytics:
 #     """
