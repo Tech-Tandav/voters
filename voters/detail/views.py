@@ -17,7 +17,7 @@ from django.db.models import Q, Count
 from django.views.decorators.csrf import csrf_exempt
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
-
+from django.db.models import Avg, Count
 from voters.detail.models import Voter, SurnameMapping, UploadHistory
 from voters.detail.serializers import (
     VoterSerializer,
@@ -63,9 +63,7 @@ PROVINCE_MAPPING = {
 }
 
 
-def apply_filters(queryset, request):
-    params = request.query_params
-
+def apply_filters(queryset, params):
     age_min = params.get('age_min')
     age_max = params.get('age_max')
     age_group = params.get('age_group')
@@ -131,30 +129,105 @@ def apply_filters(queryset, request):
 )
 
 
+
+
+
 @api_view(['GET'])
 def overview_stats(request):
-    """
-    Get overall demographic statistics.
-    Cached per filter combination.
-    """
-    params = sorted(request.query_params.items())
-    raw_key = f"overview_stats:{params}"
-    cache_key = "overview_stats:" + hashlib.md5(raw_key.encode()).hexdigest()
+    params = request.query_params  # ✅ correct access
 
-    cached = cache.get(cache_key)
-    if cached:
-        return Response({**cached, "cached": True})
+    queryset = Voter.objects.only(
+        'id',
+        'age',
+        'gender',
+        'age_group',
+        'caste_group',
+        'province',
+        'district',
+        'constituency',
+        'ward',
+        'name',
+    )
 
-    # ⚡ Only fetch needed column for count & aggs
-    queryset = Voter.objects.only('id')
-    queryset = apply_filters(queryset, request)
+    age_min = params.get('age_min')
+    age_max = params.get('age_max')
+    age_group = params.get('age_group')
+    gender = params.get('gender')
+    caste_group = params.get('caste_group')
+    province = params.get('province')
+    district = params.get('district')
+    constituency = params.get('constituency')
+    ward = params.get('ward')
+    search = params.get('search')
 
-    analytics = VoterAnalytics(queryset)
-    data = analytics.get_overview_stats()
+    if age_min and age_min.isdigit():
+        queryset = queryset.filter(age__gte=int(age_min))
 
-    cache.set(cache_key, data, CACHE_TTL)
+    if age_max and age_max.isdigit():
+        queryset = queryset.filter(age__lte=int(age_max))
 
-    return Response({**data, "cached": False})
+    if age_group:
+        queryset = queryset.filter(age_group=age_group)
+
+    if gender:
+        queryset = queryset.filter(gender=gender)
+
+    if caste_group:
+        queryset = queryset.filter(caste_group=caste_group)
+
+    if province:
+        mapped = PROVINCE_MAPPING.get(province.strip(), province.strip())
+        queryset = queryset.filter(province=mapped)  # exact match = index-friendly
+
+    if district:
+        queryset = queryset.filter(district=district)
+
+    if constituency:
+        queryset = queryset.filter(constituency=constituency)
+
+    if ward and ward.isdigit():
+        queryset = queryset.filter(ward=int(ward))
+
+    if search:
+        queryset = queryset.filter(name__icontains=search)
+
+    # ⚡ ONE count only
+    total = queryset.count()
+
+    if not total:
+        return Response({
+            'total_voters': 0,
+            'average_age': 0,
+            'median_age': 0,
+            'gender_distribution': {},
+            'age_group_summary': {},
+            'caste_summary': {},
+        })
+
+    aggregates = queryset.aggregate(avg_age=Avg('age'))
+
+    gender_qs = queryset.values('gender').annotate(total=Count('id'))
+    age_group_qs = queryset.values('age_group').annotate(total=Count('id'))
+    caste_qs = queryset.values('caste_group').annotate(total=Count('id'))
+
+    gender_dist = {row['gender']: row['total'] for row in gender_qs}
+    gender_pct = {
+        f"{row['gender']}_percentage": round(row['total'] / total * 100, 1)
+        for row in gender_qs
+    }
+
+    return Response({
+        'total_voters': total,
+        'average_age': round(aggregates['avg_age'] or 0, 1),
+        'median_age': 0,
+        'gender_distribution': {**gender_dist, **gender_pct},
+        'age_group_summary': {row['age_group']: row['total'] for row in age_group_qs},
+        'caste_summary': {row['caste_group']: row['total'] for row in caste_qs},
+    })
+    # # queryset = apply_filters(queryset, params)
+    # # analytics = VoterAnalytics(queryset)
+    # # data = analytics.get_overview_stats()
+    # return Response({**data, "cached": False})
 
 
 @extend_schema(
@@ -245,6 +318,7 @@ def age_distribution(request):
 #         """Get count of voters (respects filters)"""
 #         count = self.get_queryset().count()
 #         return Response({'count': count})
+
 
 class VoterViewSet(viewsets.ReadOnlyModelViewSet):
     """
