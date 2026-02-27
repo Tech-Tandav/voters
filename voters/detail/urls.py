@@ -20,8 +20,8 @@ urlpatterns = [
     path('', include(router.urls)),
     
     # Analysis Endpoints
-    path('analysis/overview/', views.overview_stats, name='analysis-overview'),
-    path('analysis/age-distribution/', views.age_distribution, name='analysis-age-distribution'),
+    path('analysis/overview/', views.OverviewStatsView.as_view(), name='analysis-overview'),
+    path('analysis/age-distribution/',views.AgeDistributionView.as_view(), name='analysis-age-distribution'),
     
     # Admin Endpoints
     path('admin/upload/', views.upload_csv, name='admin-upload-csv'),
