@@ -33,6 +33,9 @@ from voters.detail.serializers import (
 from voters.detail.utils import process_csv_file, get_analytics, VoterAnalytics
 from voters.detail.utils.zip_processor import process_zip_file
 import logging
+from voters.detail.filters import VoterAnalyticsFilter
+from rest_framework.generics import GenericAPIView
+
 
 logger = logging.getLogger(__name__)
 
@@ -45,97 +48,14 @@ class VoterPagination(PageNumberPagination):
     max_page_size = 200
 
 
-PROVINCE_MAPPING = {
-    # 'कोशी': 'Koshi',
-    'कोशी प्रदेश': 'Koshi',
-    # 'मधेश': 'Madhesh',
-    'मधेश प्रदेश': 'Madhesh',
-    # 'बागमती': 'Bagmati',
-    'बागमती प्रदेश': 'Bagmati',
-    # 'गण्डकी': 'Gandaki',
-    'गण्डकी प्रदेश': 'Gandaki',
-    # 'लुम्बिनी': 'Lumbini',
-    'लुम्बिनी प्रदेश': 'Lumbini',
-    # 'कर्णाली': 'Karnali',
-    'कर्णाली प्रदेश': 'Karnali',
-    # 'सुदूरपश्चिम': 'Sudurpashchim',
-    'सुदूरपश्चिम प्रदेश': 'Sudurpashchim',
-}
 
 
-def apply_filters(queryset, params):
-    age_min = params.get('age_min')
-    age_max = params.get('age_max')
-    age_group = params.get('age_group')
-    gender = params.get('gender')
-    caste_group = params.get('caste_group')
-    province = params.get('province')
-    district = params.get('district')
-    constituency = params.get('constituency')
-    ward = params.get('ward')
-    search = params.get('search')
 
-    if age_min and age_min.isdigit():
-        queryset = queryset.filter(age__gte=int(age_min))
-
-    if age_max and age_max.isdigit():
-        queryset = queryset.filter(age__lte=int(age_max))
-
-    if age_group:
-        queryset = queryset.filter(age_group=age_group)
-
-    if gender:
-        queryset = queryset.filter(gender=gender)
-
-    if caste_group:
-        queryset = queryset.filter(caste_group=caste_group)
-
-    if province:
-        mapped = PROVINCE_MAPPING.get(province.strip(), province.strip())
-        queryset = queryset.filter(province=mapped)  # exact match = index friendly
-
-    if district:
-        queryset = queryset.filter(district=district)
-
-    if constituency:
-        queryset = queryset.filter(constituency=constituency)
-
-    if ward and ward.isdigit():
-        queryset = queryset.filter(ward=int(ward))
-
-    if search:
-        queryset = queryset.filter(name__icontains=search)
-
-    return queryset
 # =============================================================================
 # ANALYSIS API ENDPOINTS
 # =============================================================================
 
-@extend_schema(
-    tags=['Analysis'],
-    summary='Get overview statistics',
-    description='Returns comprehensive overview of voter demographics',
-    parameters=[
-        OpenApiParameter('age_min', OpenApiTypes.INT, description='Minimum age'),
-        OpenApiParameter('age_max', OpenApiTypes.INT, description='Maximum age'),
-        OpenApiParameter('age_group', OpenApiTypes.STR, description='Age group filter'),
-        OpenApiParameter('gender', OpenApiTypes.STR, description='Gender filter'),
-        OpenApiParameter('caste_group', OpenApiTypes.STR, description='Caste group filter'),
-        OpenApiParameter('province', OpenApiTypes.STR, description='Province filter'),
-        OpenApiParameter('constituency', OpenApiTypes.STR, description='Constituency filter'),
-        OpenApiParameter('ward', OpenApiTypes.INT, description='Ward number'),
-    ],
-    responses={200: OverviewStatsSerializer}
-)
-
-
-
-
-
-@api_view(['GET'])
-def overview_stats(request):
-    params = request.query_params  # ✅ correct access
-
+class OverviewStatsView(GenericAPIView):
     queryset = Voter.objects.only(
         'id',
         'age',
@@ -148,128 +68,74 @@ def overview_stats(request):
         'ward',
         'name',
     )
+    filterset_class = VoterAnalyticsFilter
 
-    age_min = params.get('age_min')
-    age_max = params.get('age_max')
-    age_group = params.get('age_group')
-    gender = params.get('gender')
-    caste_group = params.get('caste_group')
-    province = params.get('province')
-    district = params.get('district')
-    constituency = params.get('constituency')
-    ward = params.get('ward')
-    search = params.get('search')
+    @extend_schema(
+        tags=['Analysis'],
+        summary='Get overview statistics',
+        description='Returns comprehensive overview of voter demographics',
+        responses={200: OverviewStatsSerializer}
+    )
+    def get(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
 
-    if age_min and age_min.isdigit():
-        queryset = queryset.filter(age__gte=int(age_min))
+        total = queryset.count()
 
-    if age_max and age_max.isdigit():
-        queryset = queryset.filter(age__lte=int(age_max))
+        if not total:
+            return Response({
+                'total_voters': 0,
+                'average_age': 0,
+                'median_age': 0,
+                'gender_distribution': {},
+                'age_group_summary': {},
+                'caste_summary': {},
+            })
 
-    if age_group:
-        queryset = queryset.filter(age_group=age_group)
+        aggregates = queryset.aggregate(avg_age=Avg('age'))
 
-    if gender:
-        queryset = queryset.filter(gender=gender)
+        gender_qs = queryset.values('gender').annotate(total=Count('id'))
+        age_group_qs = queryset.values('age_group').annotate(total=Count('id'))
+        caste_qs = queryset.values('caste_group').annotate(total=Count('id'))
 
-    if caste_group:
-        queryset = queryset.filter(caste_group=caste_group)
+        gender_dist = {row['gender']: row['total'] for row in gender_qs}
+        gender_pct = {
+            f"{row['gender']}_percentage": round(row['total'] / total * 100, 1)
+            for row in gender_qs
+        }
 
-    if province:
-        mapped = PROVINCE_MAPPING.get(province.strip(), province.strip())
-        queryset = queryset.filter(province=mapped)  # exact match = index-friendly
-
-    if district:
-        queryset = queryset.filter(district=district)
-
-    if constituency:
-        queryset = queryset.filter(constituency=constituency)
-
-    if ward and ward.isdigit():
-        queryset = queryset.filter(ward=int(ward))
-
-    if search:
-        queryset = queryset.filter(name__icontains=search)
-
-    # ⚡ ONE count only
-    total = queryset.count()
-
-    if not total:
         return Response({
-            'total_voters': 0,
-            'average_age': 0,
+            'total_voters': total,
+            'average_age': round(aggregates['avg_age'] or 0, 1),
             'median_age': 0,
-            'gender_distribution': {},
-            'age_group_summary': {},
-            'caste_summary': {},
+            'gender_distribution': {**gender_dist, **gender_pct},
+            'age_group_summary': {row['age_group']: row['total'] for row in age_group_qs},
+            'caste_summary': {row['caste_group']: row['total'] for row in caste_qs},
         })
 
-    aggregates = queryset.aggregate(avg_age=Avg('age'))
-
-    gender_qs = queryset.values('gender').annotate(total=Count('id'))
-    age_group_qs = queryset.values('age_group').annotate(total=Count('id'))
-    caste_qs = queryset.values('caste_group').annotate(total=Count('id'))
-
-    gender_dist = {row['gender']: row['total'] for row in gender_qs}
-    gender_pct = {
-        f"{row['gender']}_percentage": round(row['total'] / total * 100, 1)
-        for row in gender_qs
-    }
-
-    return Response({
-        'total_voters': total,
-        'average_age': round(aggregates['avg_age'] or 0, 1),
-        'median_age': 0,
-        'gender_distribution': {**gender_dist, **gender_pct},
-        'age_group_summary': {row['age_group']: row['total'] for row in age_group_qs},
-        'caste_summary': {row['caste_group']: row['total'] for row in caste_qs},
-    })
-    # # queryset = apply_filters(queryset, params)
-    # # analytics = VoterAnalytics(queryset)
-    # # data = analytics.get_overview_stats()
-    # return Response({**data, "cached": False})
 
 
-@extend_schema(
-    tags=['Analysis'],
-    summary='Get age group distribution',
-    description='Returns age group distribution in chart-ready format',
-    parameters=[
-        OpenApiParameter('gender', OpenApiTypes.STR, description='Filter by gender'),
-        OpenApiParameter('caste_group', OpenApiTypes.STR, description='Filter by caste'),
-        OpenApiParameter('ward', OpenApiTypes.INT, description='Filter by ward'),
-    ],
-    responses={200: DistributionResponseSerializer}
-)
-
-
-@api_view(['GET'])
-def age_distribution(request):
-    """
-    Get age group distribution.
-    Returns data ready for pie/bar charts.
-    Cached per filter combination.
-    """
-
-    # 🔐 Stable cache key based on filters
-    params = sorted(request.query_params.items())
-    raw_key = f"age_distribution:{params}"
-    cache_key = "age_distribution:" + hashlib.md5(raw_key.encode()).hexdigest()
-
-    cached = cache.get(cache_key)
-    if cached:
-        return Response({**cached, "cached": True})
-
-    # ⚡ Limit selected columns for faster count + group by
+class AgeDistributionView(GenericAPIView):
     queryset = Voter.objects.only('id', 'age_group')
-    queryset = apply_filters(queryset, request)
+    filterset_class = VoterAnalyticsFilter
 
-    analytics = VoterAnalytics(queryset)
-    data = analytics.get_age_distribution()
+    @extend_schema(
+        tags=['Analysis'],
+        summary='Get age group distribution',
+        description='Returns age group distribution in chart-ready format',
+        parameters=[
+            OpenApiParameter('gender', OpenApiTypes.STR, description='Filter by gender'),
+            OpenApiParameter('caste_group', OpenApiTypes.STR, description='Filter by caste'),
+            OpenApiParameter('ward', OpenApiTypes.INT, description='Filter by ward'),
+        ],
+        responses={200: DistributionResponseSerializer}
+    )
+    def get(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
 
-    cache.set(cache_key, data, CACHE_TTL)
+        analytics = VoterAnalytics(queryset)
+        data = analytics.get_age_distribution()
 
-    return Response({**data, "cached": False})
+        return Response(data)
 
 
 

@@ -16,6 +16,72 @@ logger = logging.getLogger(__name__)
 from django.db.models import Count, Avg
 from voters.detail.models import Voter
 
+
+
+PROVINCE_MAPPING = {
+    # 'कोशी': 'Koshi',
+    'कोशी प्रदेश': 'Koshi',
+    # 'मधेश': 'Madhesh',
+    'मधेश प्रदेश': 'Madhesh',
+    # 'बागमती': 'Bagmati',
+    'बागमती प्रदेश': 'Bagmati',
+    # 'गण्डकी': 'Gandaki',
+    'गण्डकी प्रदेश': 'Gandaki',
+    # 'लुम्बिनी': 'Lumbini',
+    'लुम्बिनी प्रदेश': 'Lumbini',
+    # 'कर्णाली': 'Karnali',
+    'कर्णाली प्रदेश': 'Karnali',
+    # 'सुदूरपश्चिम': 'Sudurpashchim',
+    'सुदूरपश्चिम प्रदेश': 'Sudurpashchim',
+}
+
+
+
+def apply_filters(queryset, params):
+    age_min = params.get('age_min')
+    age_max = params.get('age_max')
+    age_group = params.get('age_group')
+    gender = params.get('gender')
+    caste_group = params.get('caste_group')
+    province = params.get('province')
+    district = params.get('district')
+    constituency = params.get('constituency')
+    ward = params.get('ward')
+    search = params.get('search')
+
+    if age_min and age_min.isdigit():
+        queryset = queryset.filter(age__gte=int(age_min))
+
+    if age_max and age_max.isdigit():
+        queryset = queryset.filter(age__lte=int(age_max))
+
+    if age_group:
+        queryset = queryset.filter(age_group=age_group)
+
+    if gender:
+        queryset = queryset.filter(gender=gender)
+
+    if caste_group:
+        queryset = queryset.filter(caste_group=caste_group)
+
+    if province:
+        mapped = PROVINCE_MAPPING.get(province.strip(), province.strip())
+        queryset = queryset.filter(province=mapped)  # exact match = index friendly
+
+    if district:
+        queryset = queryset.filter(district=district)
+
+    if constituency:
+        queryset = queryset.filter(constituency=constituency)
+
+    if ward and ward.isdigit():
+        queryset = queryset.filter(ward=int(ward))
+
+    if search:
+        queryset = queryset.filter(name__icontains=search)
+
+    return queryset
+
 class VoterAnalytics:
     def __init__(self, queryset):
         self.queryset = queryset
