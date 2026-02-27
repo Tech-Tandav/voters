@@ -230,25 +230,9 @@ class VoterViewSet(viewsets.ReadOnlyModelViewSet):
     
     @action(detail=False, methods=['get'])
     def count(self, request):
-        # cache_key = self._build_cache_key(request)
-
-        # cached_count = cache.get(cache_key)
-        # if cached_count is not None:
-        #     return Response({
-        #         'count': cached_count,
-        #         'cached': True
-        #     })
-
-        queryset = self.get_queryset()
-        count = queryset.count()
-
-        # Cache for 5 minutes (tune based on how fresh data must be)
-        # cache.set(cache_key, count, timeout=60 * 10)
-
-        return Response({
-            'count': count,
-            'cached': False
-        })
+        """Get count of voters (respects filters)"""
+        count = self.get_queryset().count()
+        return Response({'count': count})
 # =============================================================================
 # ADMIN ENDPOINTS (CSV Upload, Surname Management)
 # =============================================================================
