@@ -46,19 +46,19 @@ class VoterPagination(PageNumberPagination):
 
 
 PROVINCE_MAPPING = {
-    'कोशी': 'Koshi',
+    # 'कोशी': 'Koshi',
     'कोशी प्रदेश': 'Koshi',
-    'मधेश': 'Madhesh',
+    # 'मधेश': 'Madhesh',
     'मधेश प्रदेश': 'Madhesh',
-    'बागमती': 'Bagmati',
+    # 'बागमती': 'Bagmati',
     'बागमती प्रदेश': 'Bagmati',
-    'गण्डकी': 'Gandaki',
+    # 'गण्डकी': 'Gandaki',
     'गण्डकी प्रदेश': 'Gandaki',
-    'लुम्बिनी': 'Lumbini',
+    # 'लुम्बिनी': 'Lumbini',
     'लुम्बिनी प्रदेश': 'Lumbini',
-    'कर्णाली': 'Karnali',
+    # 'कर्णाली': 'Karnali',
     'कर्णाली प्रदेश': 'Karnali',
-    'सुदूरपश्चिम': 'Sudurpashchim',
+    # 'सुदूरपश्चिम': 'Sudurpashchim',
     'सुदूरपश्चिम प्रदेश': 'Sudurpashchim',
 }
 
