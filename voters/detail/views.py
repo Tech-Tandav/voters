@@ -30,13 +30,13 @@ from voters.detail.serializers import (
     DistributionResponseSerializer,
     CrossAnalysisResponseSerializer,
 )
-from voters.detail.utils import process_csv_file, get_analytics
+from voters.detail.utils import process_csv_file, get_analytics, VoterAnalytics
 from voters.detail.utils.zip_processor import process_zip_file
 import logging
 
 logger = logging.getLogger(__name__)
 
-
+CACHE_TTL = 60 * 5  # 5 minutes
 # Custom pagination for voter lists
 class VoterPagination(PageNumberPagination):
     """Custom pagination with configurable page size"""
@@ -45,102 +45,70 @@ class VoterPagination(PageNumberPagination):
     max_page_size = 200
 
 
+PROVINCE_MAPPING = {
+    'कोशी': 'Koshi',
+    'कोशी प्रदेश': 'Koshi',
+    'मधेश': 'Madhesh',
+    'मधेश प्रदेश': 'Madhesh',
+    'बागमती': 'Bagmati',
+    'बागमती प्रदेश': 'Bagmati',
+    'गण्डकी': 'Gandaki',
+    'गण्डकी प्रदेश': 'Gandaki',
+    'लुम्बिनी': 'Lumbini',
+    'लुम्बिनी प्रदेश': 'Lumbini',
+    'कर्णाली': 'Karnali',
+    'कर्णाली प्रदेश': 'Karnali',
+    'सुदूरपश्चिम': 'Sudurpashchim',
+    'सुदूरपश्चिम प्रदेश': 'Sudurpashchim',
+}
+
+
 def apply_filters(queryset, request):
-    """
-    Apply common filters to queryset based on request parameters.
-    
-    Filters:
-    - age_min, age_max: Age range
-    - age_group: Age category (gen_z, working, mature, senior)
-    - gender: Gender (male, female, other)
-    - gender: Gender (male, female, other)
-    - caste_group: Caste group
-    - province: Province name
-    - district: District name
-    - constituency: Constituency name
-    - ward: Ward number
-    - search: Search in name
-    
-    Args:
-        queryset: Voter QuerySet
-        request: HTTP Request object
-    
-    Returns:
-        Filtered QuerySet
-    """
-    # Age range filter
-    age_min = request.query_params.get('age_min')
-    if age_min:
+    params = request.query_params
+
+    age_min = params.get('age_min')
+    age_max = params.get('age_max')
+    age_group = params.get('age_group')
+    gender = params.get('gender')
+    caste_group = params.get('caste_group')
+    province = params.get('province')
+    district = params.get('district')
+    constituency = params.get('constituency')
+    ward = params.get('ward')
+    search = params.get('search')
+
+    if age_min and age_min.isdigit():
         queryset = queryset.filter(age__gte=int(age_min))
-    
-    age_max = request.query_params.get('age_max')
-    if age_max:
+
+    if age_max and age_max.isdigit():
         queryset = queryset.filter(age__lte=int(age_max))
-    
-    # Age group filter
-    age_group = request.query_params.get('age_group')
+
     if age_group:
         queryset = queryset.filter(age_group=age_group)
-    
-    # Gender filter
-    gender = request.query_params.get('gender')
+
     if gender:
         queryset = queryset.filter(gender=gender)
-    
-    # Caste group filter
-    # Caste group filter
-    caste_group = request.query_params.get('caste_group')
+
     if caste_group:
         queryset = queryset.filter(caste_group=caste_group)
-    
-    # Province Mapping (Nepali -> English)
-    PROVINCE_MAPPING = {
-        'कोशी': 'Koshi',
-        'कोशी प्रदेश': 'Koshi',
-        'मधेश': 'Madhesh',
-        'मधेश प्रदेश': 'Madhesh',
-        'बागमती': 'Bagmati',
-        'बागमती प्रदेश': 'Bagmati',
-        'गण्डकी': 'Gandaki',
-        'गण्डकी प्रदेश': 'Gandaki',
-        'लुम्बिनी': 'Lumbini',
-        'लुम्बिनी प्रदेश': 'Lumbini',
-        'कर्णाली': 'Karnali',
-        'कर्णाली प्रदेश': 'Karnali',
-        'सुदूरपश्चिम': 'Sudurpashchim',
-        'सुदूरपश्चिम प्रदेश': 'Sudurpashchim',
-    }
 
-    # Province filter
-    province = request.query_params.get('province')
     if province:
-        # Check if input is in Nepali mapping
-        mapped_province = PROVINCE_MAPPING.get(province.strip(), province)
-        queryset = queryset.filter(province__icontains=mapped_province)
+        mapped = PROVINCE_MAPPING.get(province.strip(), province.strip())
+        queryset = queryset.filter(province=mapped)  # exact match = index friendly
 
-    # District filter
-    district = request.query_params.get('district')
     if district:
-        queryset = queryset.filter(district__icontains=district)
+        queryset = queryset.filter(district=district)
 
-    # Constituency filter
-    constituency = request.query_params.get('constituency')
     if constituency:
-        queryset = queryset.filter(constituency__icontains=constituency)
-    
-    # Ward filter
-    ward = request.query_params.get('ward')
-    if ward:
+        queryset = queryset.filter(constituency=constituency)
+
+    if ward and ward.isdigit():
         queryset = queryset.filter(ward=int(ward))
-    
-    # Search in name
-    search = request.query_params.get('search')
+
     if search:
         queryset = queryset.filter(name__icontains=search)
-    
+
     return queryset
-
-
 # =============================================================================
 # ANALYSIS API ENDPOINTS
 # =============================================================================
@@ -162,19 +130,31 @@ def apply_filters(queryset, request):
     responses={200: OverviewStatsSerializer}
 )
 
+
 @api_view(['GET'])
 def overview_stats(request):
     """
     Get overall demographic statistics.
-    Supports filtering via query parameters.
+    Cached per filter combination.
     """
-    queryset = Voter.objects.all()
+    params = sorted(request.query_params.items())
+    raw_key = f"overview_stats:{params}"
+    cache_key = "overview_stats:" + hashlib.md5(raw_key.encode()).hexdigest()
+
+    cached = cache.get(cache_key)
+    if cached:
+        return Response({**cached, "cached": True})
+
+    # ⚡ Only fetch needed column for count & aggs
+    queryset = Voter.objects.only('id')
     queryset = apply_filters(queryset, request)
-    
-    analytics = get_analytics(queryset)
+
+    analytics = VoterAnalytics(queryset)
     data = analytics.get_overview_stats()
-    
-    return Response(data)
+
+    cache.set(cache_key, data, CACHE_TTL)
+
+    return Response({**data, "cached": False})
 
 
 @extend_schema(
