@@ -39,8 +39,7 @@ from rest_framework.generics import GenericAPIView
 
 logger = logging.getLogger(__name__)
 
-# CACHE_TTL = 60 * 5  # 5 minutes
-# Custom pagination for voter lists
+
 class VoterPagination(PageNumberPagination):
     """Custom pagination with configurable page size"""
     page_size = 50
@@ -54,31 +53,12 @@ class VoterPagination(PageNumberPagination):
 # =============================================================================
 # ANALYSIS API ENDPOINTS
 # =============================================================================
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 
-# @method_decorator(cache_page(60 * 10), name='get')  # cache for 10 minutes
+
 class OverviewStatsView(GenericAPIView):
-    queryset = Voter.objects.only(
-        'id',
-        'age',
-        'gender',
-        'age_group',
-        'caste_group',
-        'province',
-        'district',
-        'constituency',
-        'ward',
-        'name',
-    )
+    queryset = Voter.objects.all()
     filterset_class = VoterAnalyticsFilter
 
-    @extend_schema(
-        tags=['Analysis'],
-        summary='Get overview statistics',
-        description='Returns comprehensive overview of voter demographics',
-        responses={200: OverviewStatsSerializer},
-    )
     def get(self, request, *args, **kwargs):
         qs = self.filter_queryset(self.get_queryset())
 
@@ -87,55 +67,35 @@ class OverviewStatsView(GenericAPIView):
             return Response({
                 'total_voters': 0,
                 'average_age': 0,
-                'median_age': None,   # median removed from live query for performance
+                'median_age': None,
                 'gender_distribution': {},
                 'age_group_summary': {},
                 'caste_summary': {},
             })
 
-        aggregates = qs.aggregate(avg_age=Avg('age'))
+        avg_age = qs.aggregate(avg_age=Avg('age'))['avg_age'] or 0
 
         gender_qs = qs.values('gender').annotate(total=Count('id'))
         age_group_qs = qs.values('age_group').annotate(total=Count('id'))
         caste_qs = qs.values('caste_group').annotate(total=Count('id'))
 
         gender_dist = {row['gender']: row['total'] for row in gender_qs}
-        gender_pct = {
-            f"{row['gender']}_percentage": round(row['total'] * 100 / total, 1)
-            for row in gender_qs
-        }
+        gender_pct = {f"{row['gender']}_percentage": round(row['total']*100/total, 1) for row in gender_qs}
 
         return Response({
             'total_voters': total,
-            'average_age': round(aggregates['avg_age'] or 0, 1),
-            'median_age': None,  # intentionally skipped (too slow on 20M rows)
+            'average_age': round(avg_age, 1),
+            'median_age': None,
             'gender_distribution': {**gender_dist, **gender_pct},
-            'age_group_summary': {
-                row['age_group']: row['total'] for row in age_group_qs
-            },
-            'caste_summary': {
-                row['caste_group']: row['total'] for row in caste_qs
-            },
+            'age_group_summary': {row['age_group']: row['total'] for row in age_group_qs},
+            'caste_summary': {row['caste_group']: row['total'] for row in caste_qs},
         })
 
 
-
-# @method_decorator(cache_page(60 * 10), name='get')  # cache 10 minutes
 class AgeDistributionView(GenericAPIView):
-    queryset = Voter.objects.only('id', 'age_group')
+    queryset = Voter.objects.all()
     filterset_class = VoterAnalyticsFilter
 
-    @extend_schema(
-        tags=['Analysis'],
-        summary='Get age group distribution',
-        description='Returns age group distribution in chart-ready format',
-        parameters=[
-            OpenApiParameter('gender', OpenApiTypes.STR, description='Filter by gender'),
-            OpenApiParameter('caste_group', OpenApiTypes.STR, description='Filter by caste'),
-            OpenApiParameter('ward', OpenApiTypes.INT, description='Filter by ward'),
-        ],
-        responses={200: DistributionResponseSerializer},
-    )
     def get(self, request, *args, **kwargs):
         qs = self.filter_queryset(self.get_queryset())
 
@@ -146,21 +106,17 @@ class AgeDistributionView(GenericAPIView):
             'senior': 'Senior (60+)',
         }
 
-        total = qs.count()
-
-        grouped = qs.values('age_group').annotate(total=Count('id'))
+        grouped = list(qs.values('age_group').annotate(total=Count('id')))
+        total = sum(row['total'] for row in grouped)
 
         counts = {row['age_group']: row['total'] for row in grouped}
 
-        labels = []
-        values = []
-        percentages = []
-
+        labels, values, percentages = [], [], []
         for key, label in AGE_GROUP_LABELS.items():
             count = counts.get(key, 0)
             labels.append(label)
             values.append(count)
-            percentages.append(round((count * 100) / total, 1) if total else 0)
+            percentages.append(round((count*100)/total, 1) if total else 0)
 
         return Response({
             'chart_data': {
@@ -180,23 +136,20 @@ class AgeDistributionView(GenericAPIView):
 # VOTER DATA ENDPOINTS
 # =============================================================================
 
+
+
 class VoterViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for viewing voter data.
-    Supports filtering, search, and pagination.
-
-    list: Get paginated list of voters
-    retrieve: Get details of a specific voter
-    count: Get count of voters (filtered, cached)
+    Read-only API for voters.
+    No caching anywhere. Every request hits the database.
     """
-
     queryset = Voter.objects.all()
     serializer_class = VoterSerializer
     pagination_class = VoterPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['name', 'voter_id']
-    ordering_fields = ['age', 'name', 'voter_id']
-    ordering = ['name']
+    search_fields = ['voter_id']  # only indexed fields for performance
+    ordering_fields = ['age', 'voter_id']
+    ordering = ['voter_id']
     filterset_class = VoterAnalyticsFilter
 
     def get_serializer_class(self):
@@ -204,29 +157,10 @@ class VoterViewSet(viewsets.ReadOnlyModelViewSet):
             return VoterListSerializer
         return VoterSerializer
 
-    # def get_queryset(self):
-    #     queryset = super().get_queryset().only('id')  # makes count faster
-    #     return apply_filters(queryset, self.request)
-
-    def _build_cache_key(self, request):
-        """
-        Build a stable cache key based on query params.
-        Different filters = different cache entries.
-        """
-        params = sorted(request.query_params.items())
-        raw_key = f"voter_count:{params}"
-        return "voter_count:" + hashlib.md5(raw_key.encode()).hexdigest()
-
-    @extend_schema(
-        tags=['Voters'],
-        summary='Get voter count (cached)',
-        description='Returns total count of voters (with filters applied, cached in Redis)',
-    )
-    
     @action(detail=False, methods=['get'])
     def count(self, request):
-        """Get count of voters (respects filters)"""
-        count = self.get_queryset().count()
+        """Get total count of voters (no cache)"""
+        count = self.filter_queryset(self.get_queryset()).count()
         return Response({'count': count})
 # =============================================================================
 # ADMIN ENDPOINTS (CSV Upload, Surname Management)
