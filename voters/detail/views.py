@@ -39,7 +39,7 @@ from rest_framework.generics import GenericAPIView
 
 logger = logging.getLogger(__name__)
 
-CACHE_TTL = 60 * 5  # 5 minutes
+# CACHE_TTL = 60 * 5  # 5 minutes
 # Custom pagination for voter lists
 class VoterPagination(PageNumberPagination):
     """Custom pagination with configurable page size"""
@@ -57,7 +57,7 @@ class VoterPagination(PageNumberPagination):
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 
-@method_decorator(cache_page(60 * 10), name='get')  # cache for 10 minutes
+# @method_decorator(cache_page(60 * 10), name='get')  # cache for 10 minutes
 class OverviewStatsView(GenericAPIView):
     queryset = Voter.objects.only(
         'id',
@@ -120,7 +120,7 @@ class OverviewStatsView(GenericAPIView):
 
 
 
-@method_decorator(cache_page(60 * 10), name='get')  # cache 10 minutes
+# @method_decorator(cache_page(60 * 10), name='get')  # cache 10 minutes
 class AgeDistributionView(GenericAPIView):
     queryset = Voter.objects.only('id', 'age_group')
     filterset_class = VoterAnalyticsFilter
