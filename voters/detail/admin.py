@@ -13,11 +13,8 @@ from voters.detail.models import Voter, SurnameMapping, UploadHistory
 
 @admin.register(Voter)
 class VoterAdmin(admin.ModelAdmin):
-    """
-    Admin interface for Voter model.
-    Allows viewing, searching, and filtering voter records.
-    """
-    
+    show_full_result_count = False
+
     list_display = [
         'voter_id',
         'name',
@@ -27,21 +24,20 @@ class VoterAdmin(admin.ModelAdmin):
         'caste_group',
         'ward',
     ]
-    
-    list_filter = [
-        'age_group',
-        'gender',
-        'caste_group',
-        'ward',
-        'district',
-    ]
-    
-    search_fields = [
-        'voter_id',
-        'name',
-        'surname',
-    ]
-    
+
+    # 🚫 Disable heavy filters on giant tables
+    list_filter = ()
+
+    # 🚫 Disable text search on massive tables
+    search_fields = ()
+
+    # 🚀 Only load the columns you actually display
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.only(
+            'id', 'voter_id', 'name', 'age', 'age_group', 'gender', 'caste_group', 'ward'
+        )
+
     readonly_fields = [
         'voter_id',
         'surname',
@@ -49,7 +45,7 @@ class VoterAdmin(admin.ModelAdmin):
         'created_at',
         'updated_at',
     ]
-    
+
     fieldsets = (
         ('Basic Information', {
             'fields': ('voter_id', 'name', 'surname', 'age', 'age_group', 'gender')
@@ -69,42 +65,33 @@ class VoterAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
-    
-    list_per_page = 50
-    
+
+    list_per_page = 25
+
     def age_group_badge(self, obj):
-        """Display age group with color badge"""
         colors = {
-            'gen_z': '#22c55e',      # Green
-            'working': '#3b82f6',    # Blue
-            'mature': '#f97316',     # Orange
-            'senior': '#6366f1',     # Purple
+            'gen_z': '#22c55e',
+            'working': '#3b82f6',
+            'mature': '#f97316',
+            'senior': '#6366f1',
         }
-        color = colors.get(obj.age_group, '#gray')
+        color = colors.get(obj.age_group, '#999')
         return format_html(
             '<span style="background-color: {}; color: white; padding: 3px 10px; '
             'border-radius: 3px; font-size: 12px;">{}</span>',
             color,
             obj.get_age_group_display()
         )
-    age_group_badge.short_description = 'Age Group'
-    
+
     def gender_badge(self, obj):
-        """Display gender with icon"""
-        icons = {
-            'male': '👨',
-            'female': '👩',
-            'other': '🧑',
-        }
-        icon = icons.get(obj.gender, '')
-        return format_html('{} {}', icon, obj.get_gender_display())
-    gender_badge.short_description = 'Gender'
-    
+        icons = {'male': '👨', 'female': '👩', 'other': '🧑'}
+        return format_html('{} {}', icons.get(obj.gender, ''), obj.get_gender_display())
+
     def has_add_permission(self, request):
-        """Disable manual addition - use CSV upload instead"""
         return False
-
-
+    
+    
+    
 @admin.register(SurnameMapping)
 class SurnameMappingAdmin(admin.ModelAdmin):
     """
