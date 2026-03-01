@@ -54,7 +54,7 @@ class VoterAdmin(admin.ModelAdmin):
             'fields': ('caste_group',)
         }),
         ('Location', {
-            'fields': ('province', 'district', 'municipality', 'ward', 'center')
+            'fields': ('province', 'constituency', 'district', 'municipality', 'ward', 'center')
         }),
         ('Family', {
             'fields': ('spouse', 'parent'),
