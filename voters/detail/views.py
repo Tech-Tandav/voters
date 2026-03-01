@@ -53,10 +53,12 @@ class VoterPagination(PageNumberPagination):
 # =============================================================================
 # ANALYSIS API ENDPOINTS
 # =============================================================================
+from django_filters.rest_framework import DjangoFilterBackend
 
 
 class OverviewStatsView(GenericAPIView):
     queryset = Voter.objects.all()
+    filter_backends = [DjangoFilterBackend]
     filterset_class = VoterAnalyticsFilter
 
     def get(self, request, *args, **kwargs):
@@ -94,6 +96,7 @@ class OverviewStatsView(GenericAPIView):
 
 class AgeDistributionView(GenericAPIView):
     queryset = Voter.objects.all()
+    filter_backends = [DjangoFilterBackend]
     filterset_class = VoterAnalyticsFilter
 
     def get(self, request, *args, **kwargs):
